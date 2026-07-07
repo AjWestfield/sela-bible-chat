@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Secrets — never commit API keys.
+# The Gemini key is injected via the GEMINI_API_KEY build setting / env var (see README).
+*.xcconfig.local
+Secrets.plist
+
+# Heavy raw reference-frame dumps (kept locally, not needed to build).
+# Curated references live in DesignReference/screens + plus_menu + the two .md docs.
+DesignReference/screens_fullres/
+DesignReference/qa/
+DesignReference/contact_sheets/
+DesignReference/verify/
+
+# Unrelated local logs
+unreal_mcp_advanced.log
