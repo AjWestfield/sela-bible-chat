@@ -30,6 +30,7 @@ struct SettingsScreen<Content: View>: View {
                     .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 64)
                 HStack {
                     CircleIconButton(systemName: "chevron.left") { dismiss() }
+                        .accessibilityIdentifier("journey-back-button")
                     Spacer()
                 }
             }

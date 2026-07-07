@@ -1,6 +1,6 @@
 # HANDOFF — where development left off
 
-_Last updated: July 6, 2026_
+_Last updated: July 6, 2026 (evening)_
 
 This doc is the single source of truth for continuing the project. Read top-to-bottom;
 it's ~5 minutes and will save you hours.
@@ -10,59 +10,42 @@ it's ~5 minutes and will save you hours.
 | Area | State |
 |---|---|
 | Full app (onboarding → paywall → verse share → main, all tabs, Daily Plan, Chat, Read, Listen, My Journey settings) | ✅ Built, builds clean, visually verified against the reference recordings |
-| Bundled audio narration (Listen player) | ✅ 24 .m4a files in `Bible Chat/Audio/` (current voice: ElevenLabs-generated placeholder) |
-| **Home + button opens My Journey on tap** | ❌ **OPEN BUG — the only known functional defect. Details below.** |
-| Complete functional audit | ⏳ Not finished (blocked on the bug; checklist below) |
-| Regenerate narration with [jamiepine/voicebox](https://github.com/jamiepine/voicebox) | ⏳ Repo cloned & assessed, generation not started (notes below) |
+| **Home + button opens My Journey on tap** | ✅ **FIXED & verified** — root cause + fix documented below |
+| UI test suite (`SelaUITests`) | ✅ 4 tests, all green ×2 consecutive full runs |
+| Bundled audio narration (Listen player) | ✅ 24 .m4a files in `Bible Chat/Audio/` (placeholder voice) |
+| Regenerate narration with [jamiepine/voicebox](https://github.com/jamiepine/voicebox) | 🔨 IN PROGRESS — Docker container running, voice profile created, scripts written (notes below) |
+| Complete functional audit | ⏳ Checklist below |
 | TestFlight upload | ⏳ Not started — do **only after** the audit passes |
 
-## The one open bug
+## The + button bug — SOLVED (read this before touching Home's layout)
 
-**Symptom:** the + button (top-right of Home) renders but tapping it does not present the
-My Journey sheet.
+**Symptom was:** the + button (top-right of Home) rendered but taps never fired its action.
 
-**What is PROVEN by experiment (don't re-litigate these):**
+**Root cause (two stacked problems):**
 
-1. **The presentation chain works.** Launching with `HAVEN_TAP_PLUS=1` calls
-   `app.presentJourney()` from `HomeView.onAppear` — the *exact* closure the button runs —
-   and My Journey presents perfectly (fullscreen, all rows, matches reference).
-2. **The button exists and is hittable.** The XCUITest finds `home-plus-button`,
-   `isHittable == true`.
-3. **XCUITest taps do fire actions in this app.** A control tap on the Listen tab switches
-   tabs successfully in the same test run.
-4. **Tapping + does nothing** — same test, `plusStillExists=true`, no sheet, no crash.
-5. Things already tried that did **not** fix it:
-   - Moving the journey cover to different levels of the MainTabView hierarchy
-   - Consolidating multiple `fullScreenCover`s into one
-   - Removing HomeView's own chat cover (restored afterwards)
-   - `.toolbar(.hidden, for: .navigationBar)` on the Home scroll view (still in place)
+1. **Stale-app confusion (process bug):** the project's bundle ID was changed to
+   `com.lmgaj.sela`, but an old July-1 build remained installed under the old id
+   `Bible-Chat.Bible-Chat`. Every `simctl launch` with the old id ran a 5-day-old binary —
+   which is what the "broken button" reports were actually exercising. If a fix "doesn't
+   take," check you're launching `com.lmgaj.sela`.
+2. **The real code bug (iOS 26):** interactive views placed at the very top of a
+   `ScrollView`'s content sit under the navigation/scroll-edge region, and their taps are
+   silently intercepted — deterministically. Buttons lower in the scroll (Interpret, Begin)
+   were never affected; safe-area-inset content (the tab bar) was never affected.
 
-**Repro:** `SelaUITests/PlusButtonUITests.swift` (currently red, 100% reproducible), or tap
-+ by hand in the simulator.
+**The fix (in `HomeView.swift`):** the header (brand mark + the + button) moved OUT of the
+scroll content into `.safeAreaInset(edge: .top)`. Do not move it back inside the ScrollView.
+Additionally `MainTabView` now presents Journey/Daily-Plan **directly** from
+`app.presentedModal` via a computed binding (no mirror `@State`), and
+`AppState.present(_:)` nil-then-sets defensively so a presentation dropped mid-dismissal
+can never wedge the state machine.
 
-**Where I'd look next (in order):**
+**Verified by:** `SelaUITests/PlusButtonUITests.swift` — real synthesized taps:
+open, and close-then-reopen, both green across two consecutive full-suite runs.
+Note for test authors: use the suite's `settleAndTap()` helper — Home re-lays-out shortly
+after launch and plain `tap()` can race it.
 
-1. **Is the Button action firing at all?** Add `print("PLUS TAPPED")` inside the action and
-   watch `simctl spawn booted log stream`. If it prints → the bug is in state→cover plumbing
-   (see #3). If it doesn't → it's gesture interception (see #2).
-2. **Gesture interception over the header.** The header HStack sits under the daily-verse
-   card's `.shadow(...)`; a sibling view with a large hit area (or the `ScrollView`'s
-   content inset region / safe-area top) may be swallowing touches. Try `.allowsHitTesting(false)`
-   on the shadow-casting decorations, or lift the + button into a `.safeAreaInset(edge: .top)` /
-   overlay so nothing can sit above it.
-3. **The modal binding.** `MainTabView` presents via
-   `fullScreenCover(item: appModalBinding)` where `appModalBinding` wraps
-   `app.presentedModal` (`AppState`, `AppModal` enum in `Models.swift`). SwiftUI sometimes
-   drops `@Published`-driven `item:` covers when the binding is recreated per-render — try a
-   plain `@State` mirror synced with `.onChange(of: app.presentedModal)`, or present from a
-   `.sheet(isPresented:)` bool + switch.
-4. As a last resort, present My Journey with `NavigationStack` push or `.overlay` instead of
-   `fullScreenCover` — the reference video shows a slide-in that a push replicates fine.
-
-**Verify the fix by:** running the UI test (it must go green), *then* a human tap in the
-simulator. Do not trust "the code path works" — that was the trap that hid this bug.
-
-## Functional audit checklist (resume here after the bug)
+## Functional audit checklist (resume here)
 
 Walk each of these in the sim; everything below already worked visually last session:
 
@@ -83,24 +66,33 @@ Walk each of these in the sim; everything below already worked visually last ses
       Delete account (confirm + reset), User ID tap-to-copy
 - [ ] Dark mode pass across every screen (SettingsStore drives `preferredColorScheme`)
 
-## Voicebox narration (not started)
+## Voicebox narration (in progress)
 
-Goal: replace the current placeholder narration voice with locally-generated TTS using
-**jamiepine/voicebox** so the reads match the reference video's calm male narrator.
+Goal: replace the placeholder narration voice with locally-generated TTS using
+**jamiepine/voicebox**, cloned from the reference video's calm male narrator.
 
-What I learned (repo was cloned to a scratchpad, clone it fresh):
+State so far (all reproducible):
 
-- Tauri (Rust) desktop app + **Python backend** (FastAPI, port 17493) + `bun` workspaces.
-  Easiest path: download the **macOS DMG** from `voicebox.sh` — full REST API included
-  (`POST /generate` etc., see `docs/` + README "API" section) — instead of building from source.
-- 7 TTS engines, local models (Kokoro is the lightweight/high-quality default; Qwen3-TTS or
-  Chatterbox for cloning). Voice cloning works from a few seconds of reference audio —
-  you can rip the narrator sample straight from the reference screen recording's audio track.
-- Script texts for all 24 stories already exist in `BibleData.swift` (`narration` arrays —
-  they're the karaoke lines; join them per story).
+- voicebox runs via **Docker** (`docker compose up -d --build` in a fresh clone).
+  ⚠ Upstream bug: `.dockerignore` excludes `scripts/` but the Dockerfile COPYs
+  `scripts/rocm-entrypoint.sh` — add `!scripts/rocm-entrypoint.sh` under it before building.
+  API lands on `http://127.0.0.1:17600` (compose maps 17600→17493). CPU-only is fine.
+- Voice profile created via `POST /profiles` (name "Sela Narrator"). Voice cloning needs a
+  sample + transcript: `POST /profiles/{id}/samples` (multipart `file` + `reference_text`).
+- Narrator sample extraction: the reference recording
+  (`~/Downloads/ScreenRecording_07-01-2026 00-11-38_1.MP4`, 7m06s) has clean narration at
+  ≈35–80s. `ffmpeg -ss 40 -t 30 -i ref.wav -ac 1 -ar 24000 narrator_sample.wav`.
+  Transcribe it with voicebox's own `POST /transcribe` (Whisper model downloads on first call).
+- Generation: `POST /generate {profile_id, text}` → `GET /audio/{generation_id}`.
+  Texts ≤5000 chars; the app's stories are all under that.
+- **Real narration scripts written for all 20 placeholder stories** (the `story()` factory in
+  `BibleData.swift` used a generic 3-line template). The scripts live in this repo's history /
+  BibleData once merged — style matches the existing Creation story (calm devotional,
+  10–14 sentences). Update each story's `narration:` array so karaoke lines match the audio,
+  and set `durationSeconds` from the real audio length.
 - Output → replace matching files in `Bible Chat/Audio/` (filenames = snake_cased story
-  titles). Keep .m4a (AVFoundation-friendly); convert with
-  `ffmpeg -i in.wav -c:a aac -b:a 96k out.m4a`. `AudioPlayerView` needs no code changes.
+  titles). Keep .m4a: `ffmpeg -i in.wav -c:a aac -b:a 96k out.m4a`. `AudioPlayerView`
+  needs no code changes.
 
 ## TestFlight (after everything above)
 

@@ -138,11 +138,26 @@ final class AppState: ObservableObject {
     func enterMainApp() { phase = .main }
 
     func presentDailyPlan() {
-        presentedModal = .dailyPlan
+        present(.dailyPlan)
     }
 
     func presentJourney() {
-        presentedModal = .journey
+        present(.journey)
+    }
+
+    /// Presents defensively: if a previous present was dropped by UIKit
+    /// (e.g. requested mid-dismissal), `presentedModal` can be stuck at the
+    /// same value with no cover on screen — a same-value write would then be
+    /// a no-op forever. Nil-then-set guarantees the cover binding sees a change.
+    private func present(_ modal: AppModal) {
+        if presentedModal == nil {
+            presentedModal = modal
+        } else {
+            presentedModal = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { [weak self] in
+                self?.presentedModal = modal
+            }
+        }
     }
 
     /// Marks today's plan complete → bumps streak + weekday, advances journey when earned.

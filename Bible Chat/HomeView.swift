@@ -43,7 +43,6 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
-                    header
                     dailyVerseCard
                     journeySection
                     chatSection
@@ -54,10 +53,19 @@ struct HomeView: View {
                 .padding(.top, 6)
                 .padding(.bottom, 96)
             }
+            // The header (brand + the "+" My Journey button) lives OUTSIDE the
+            // scroll content. Interactive views at the very top of an iOS 26
+            // ScrollView sit under the navigation/scroll-edge region and their
+            // taps are intercepted; safe-area-inset content is immune (the tab
+            // bar lives the same way at the bottom).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                header
+                    .padding(.horizontal, Theme.Space.screen)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
+                    .background(Theme.paper)
+            }
             .background(Theme.paper.ignoresSafeArea())
-            // Hide the (empty) navigation bar. Without this, its transparent bar
-            // sits over the top of the scroll content and intercepts taps meant
-            // for the header's + button, so the button looked dead.
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(item: chatSeedItem) { item in
                 ChatView(seed: item.seed).environmentObject(app)
@@ -157,6 +165,7 @@ struct HomeView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.35), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("interpret-button")
 
                     ShareLink(item: "“\(BibleData.dailyVerse.text)” — \(BibleData.dailyVerse.reference)") {
                         HStack(spacing: 8) {
