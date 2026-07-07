@@ -94,13 +94,24 @@ State so far (all reproducible):
   titles). Keep .m4a: `ffmpeg -i in.wav -c:a aac -b:a 96k out.m4a`. `AudioPlayerView`
   needs no code changes.
 
-## TestFlight (after everything above)
+## TestFlight — one manual step left
 
-- Bundle ID `Bible-Chat.Bible-Chat`, no entitlements beyond defaults, no third-party deps.
-- An **asc-mcp** (App Store Connect MCP, key "Claude MCP Deploy") is configured on the owner's
-  machine for upload; otherwise standard Xcode Organizer archive → upload works.
-- Reminder: archive with derived data **outside** any iCloud-synced folder (Desktop is synced;
-  iCloud xattrs break codesigning).
+Everything is built and staged; only the App Store Connect app record is missing
+(Apple only allows creating it on the website, signed in).
+
+- ✅ Release archive: `~/Library/Developer/Xcode/DerivedData/Sela-archive/Sela.xcarchive`
+- ✅ Signed IPA: `~/Library/Developer/Xcode/DerivedData/Sela-archive/export/Bible Chat.ipa`
+  (64.6 MB, app-store-connect method, team G929HL8D9D, v1.0 build 1)
+- ✅ Bundle ID `com.lmgaj.sela` registered on the developer account
+- ❌ App record: validate fails with *"Cannot determine the Apple ID from Bundle ID"* —
+  create it at appstoreconnect.apple.com → My Apps → **+** → New App
+  (iOS, name e.g. "Sela — Bible Chat", language English (U.S.),
+  bundle ID `com.lmgaj.sela`, SKU `sela-bible-chat`).
+- Then upload with `xcrun altool --upload-app` / the configured **asc-mcp**
+  (`deploy_upload_ipa` with the IPA path above), and the build lands in TestFlight
+  after Apple processing (~5–15 min).
+- Reminder: archive with derived data **outside** any iCloud-synced folder (Desktop is
+  synced; iCloud xattrs break codesigning).
 
 ## Design references
 
