@@ -85,4 +85,37 @@ final class PlusButtonUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Daily Plan"].waitForExistence(timeout: 6),
                       "Begin should open the Daily Plan")
     }
+
+    /// Listen tab → collection → story → full-screen player.
+    func testListenToPlayer() throws {
+        let app = launchHome()
+        settleAndTap(app.buttons["Listen"])
+        XCTAssertTrue(app.staticTexts["Library"].waitForExistence(timeout: 6), "Library should show")
+        // Collection cards are NavigationLinks → exposed as buttons.
+        let card = app.buttons["Bible Stories"].firstMatch
+        settleAndTap(card.exists ? card : app.staticTexts["Bible Stories"].firstMatch)
+        XCTAssertTrue(app.staticTexts["Creation"].waitForExistence(timeout: 6), "collection should open")
+        let story = app.buttons["Creation: In the Beginning"].firstMatch
+        settleAndTap(story.exists ? story : app.staticTexts["Creation: In the Beginning"].firstMatch)
+        XCTAssertTrue(app.staticTexts["BIBLE STORY"].waitForExistence(timeout: 8),
+                      "player should present")
+    }
+
+    /// Chat: send a message, get a (mock or live) reply bubble.
+    func testChatSendMessage() throws {
+        let app = launchHome()
+        settleAndTap(app.buttons["interpret-button"])
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 8), "chat composer should exist")
+        field.tap()
+        field.typeText("What does this verse mean?")
+        // Send via the arrow button (chat send control).
+        let send = app.buttons["chat-send-button"].firstMatch
+        if send.exists { send.tap() } else { app.keyboards.buttons["return"].firstMatch.tap() }
+        // A reply should stream in within a few seconds (mock replies are instant-ish).
+        let replied = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'hebrews' OR label CONTAINS[c] 'jesus' OR label CONTAINS[c] 'verse' OR label CONTAINS[c] 'god'"
+        )).firstMatch.waitForExistence(timeout: 15)
+        XCTAssertTrue(replied, "chat should produce a reply")
+    }
 }
